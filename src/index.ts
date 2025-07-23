@@ -372,6 +372,13 @@ res.json({
     flows: connections
   }
 });
+  }catch (error: unknown) {
+    console.error('Error fetching full microflow details:', error);
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    res.status(500).json({ 
+      error: 'Failed to fetch full microflow structure', 
+      message: errorMessage
+    });
   }
 });
 

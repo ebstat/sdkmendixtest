@@ -282,19 +282,7 @@ app.get('/apps/:appId/microflows/:microflowName', async (req, res) => {
       activities: targetMicroflow.objectCollection.objects
         .filter((obj: any) => obj.structureTypeName?.includes('Activity'))
         .map((activity: any) => ({
-          type: activity.structureTypeName?.replace('Microflows
-app.listen(PORT, '0.0.0.0', () => {
-   console.log(`Mendix API server running on port ${PORT}`);
-  console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
-    // Verify MENDIX_TOKEN is available
-  if (process.env.MENDIX_TOKEN) {
-    console.log('✅ MENDIX_TOKEN found in environment');
-  } else {
-    console.warn('⚠️  MENDIX_TOKEN not found in environment variables');
-  }
-});
-
-export default app;, '') || 'Unknown',
+          type: activity.structureTypeName?.replace('Microflows$', '') || 'Unknown',
           caption: activity.caption || '',
           name: activity.name || ''
         })),
@@ -303,19 +291,7 @@ export default app;, '') || 'Unknown',
       flowObjects: targetMicroflow.objectCollection.objects
         .filter((obj: any) => obj.structureTypeName?.includes('Event') || obj.structureTypeName?.includes('Gateway'))
         .map((obj: any) => ({
-          type: obj.structureTypeName?.replace('Microflows
-app.listen(PORT, '0.0.0.0', () => {
-   console.log(`Mendix API server running on port ${PORT}`);
-  console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
-    // Verify MENDIX_TOKEN is available
-  if (process.env.MENDIX_TOKEN) {
-    console.log('✅ MENDIX_TOKEN found in environment');
-  } else {
-    console.warn('⚠️  MENDIX_TOKEN not found in environment variables');
-  }
-});
-
-export default app;, '') || 'Unknown',
+          type: obj.structureTypeName?.replace('Microflows$', '') || 'Unknown',
           caption: obj.caption || '',
           name: obj.name || ''
         })),

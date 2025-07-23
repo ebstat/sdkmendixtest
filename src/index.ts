@@ -220,6 +220,182 @@ app.get('/apps/:appId/modules/:moduleName/microflows', async (req, res) => {
   }
 });
 
+// Get detailed information about a specific microflow
+app.get('/apps/:appId/microflows/:microflowName', async (req, res) => {
+  try {
+    const { appId, microflowName } = req.params;
+    const { moduleName } = req.query as { moduleName?: string };
+
+    console.log(`Fetching details for microflow: ${microflowName} in app: ${appId}`);
+
+    const client = new MendixPlatformClient();
+    const mendixApp = client.getApp(appId);
+    
+    const workingCopy = await mendixApp.createTemporaryWorkingCopy("main");
+    const model = await workingCopy.openModel();
+
+    // Find the specific microflow
+    const allMicroflows = model.allMicroflows();
+    let targetMicroflow = allMicroflows.find(mf => mf.name === microflowName);
+
+    // If moduleName is provided, also check that it matches
+    if (moduleName && targetMicroflow) {
+      const mfModuleName = getModuleName(targetMicroflow);
+      if (mfModuleName !== moduleName) {
+        targetMicroflow = undefined;
+      }
+    }
+
+    if (!targetMicroflow) {
+      return res.status(404).json({
+        error: 'Microflow not found',
+        message: `Microflow '${microflowName}' ${moduleName ? `in module '${moduleName}' ` : ''}does not exist`,
+        availableMicroflows: allMicroflows.slice(0, 10).map(mf => ({
+          name: mf.name,
+          module: getModuleName(mf)
+        }))
+      });
+    }
+
+    // Extract detailed information
+    const microflowModule = getModuleName(targetMicroflow);
+    const details = {
+      name: targetMicroflow.name,
+      module: microflowModule,
+      qualifiedName: targetMicroflow.qualifiedName || `${microflowModule || 'Unknown'}.${targetMicroflow.name}`,
+      documentation: targetMicroflow.documentation || '',
+      
+      // Parameters
+      parameters: targetMicroflow.objectCollection.objects
+        .filter((obj: any) => obj.structureTypeName === 'Microflows$MicroflowParameterObject')
+        .map((param: any) => ({
+          name: param.name,
+          type: param.type ? param.type.toString() : 'Unknown',
+          documentation: param.documentation || ''
+        })),
+
+      // Return type
+      returnType: targetMicroflow.microflowReturnType ? 
+        targetMicroflow.microflowReturnType.toString() : 'Nothing',
+
+      // Activities count
+      activities: targetMicroflow.objectCollection.objects
+        .filter((obj: any) => obj.structureTypeName?.includes('Activity'))
+        .map((activity: any) => ({
+          type: activity.structureTypeName?.replace('Microflows
+app.listen(PORT, '0.0.0.0', () => {
+   console.log(`Mendix API server running on port ${PORT}`);
+  console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
+    // Verify MENDIX_TOKEN is available
+  if (process.env.MENDIX_TOKEN) {
+    console.log('✅ MENDIX_TOKEN found in environment');
+  } else {
+    console.warn('⚠️  MENDIX_TOKEN not found in environment variables');
+  }
+});
+
+export default app;, '') || 'Unknown',
+          caption: activity.caption || '',
+          name: activity.name || ''
+        })),
+
+      // Flow objects (start/end events, etc.)
+      flowObjects: targetMicroflow.objectCollection.objects
+        .filter((obj: any) => obj.structureTypeName?.includes('Event') || obj.structureTypeName?.includes('Gateway'))
+        .map((obj: any) => ({
+          type: obj.structureTypeName?.replace('Microflows
+app.listen(PORT, '0.0.0.0', () => {
+   console.log(`Mendix API server running on port ${PORT}`);
+  console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
+    // Verify MENDIX_TOKEN is available
+  if (process.env.MENDIX_TOKEN) {
+    console.log('✅ MENDIX_TOKEN found in environment');
+  } else {
+    console.warn('⚠️  MENDIX_TOKEN not found in environment variables');
+  }
+});
+
+export default app;, '') || 'Unknown',
+          caption: obj.caption || '',
+          name: obj.name || ''
+        })),
+
+      // Security settings
+      allowedRoles: targetMicroflow.allowedRoles?.map((role: any) => role.name) || [],
+      allowConcurrentExecution: targetMicroflow.allowConcurrentExecution || false,
+      
+      // Metadata
+      markAsUsed: targetMicroflow.markAsUsed || false,
+      excluded: targetMicroflow.excluded || false
+    };
+
+    // Add statistics
+    const stats = {
+      totalObjects: targetMicroflow.objectCollection.objects.length,
+      activitiesCount: details.activities.length,
+      parametersCount: details.parameters.length,
+      flowObjectsCount: details.flowObjects.length
+    };
+
+    res.json({
+      appId,
+      microflow: details,
+      statistics: stats
+    });
+
+  } catch (error: unknown) {
+    console.error('Error fetching microflow details:', error);
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    res.status(500).json({ 
+      error: 'Failed to fetch microflow details', 
+      message: errorMessage,
+      hasToken: !!process.env.MENDIX_TOKEN
+    });
+  }
+});
+
+// Get microflow details by qualified name (alternative endpoint)
+app.get('/apps/:appId/microflows/by-qualified-name/:qualifiedName', async (req, res) => {
+  try {
+    const { appId, qualifiedName } = req.params;
+
+    console.log(`Fetching microflow by qualified name: ${qualifiedName}`);
+
+    const client = new MendixPlatformClient();
+    const mendixApp = client.getApp(appId);
+    
+    const workingCopy = await mendixApp.createTemporaryWorkingCopy("main");
+    const model = await workingCopy.openModel();
+
+    const allMicroflows = model.allMicroflows();
+    const targetMicroflow = allMicroflows.find(mf => 
+      mf.qualifiedName === qualifiedName ||
+      `${getModuleName(mf)}.${mf.name}` === qualifiedName
+    );
+
+    if (!targetMicroflow) {
+      return res.status(404).json({
+        error: 'Microflow not found',
+        message: `Microflow with qualified name '${qualifiedName}' does not exist`
+      });
+    }
+
+    // Redirect to the standard microflow details endpoint
+    const microflowModule = getModuleName(targetMicroflow);
+    const redirectUrl = `/apps/${appId}/microflows/${targetMicroflow.name}${microflowModule ? `?moduleName=${microflowModule}` : ''}`;
+    
+    res.redirect(redirectUrl);
+
+  } catch (error: unknown) {
+    console.error('Error fetching microflow by qualified name:', error);
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    res.status(500).json({ 
+      error: 'Failed to fetch microflow by qualified name', 
+      message: errorMessage
+    });
+  }
+});
+
 // Start server
 app.listen(PORT, '0.0.0.0', () => {
    console.log(`Mendix API server running on port ${PORT}`);

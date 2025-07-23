@@ -10,7 +10,7 @@ app.use(express.json());
 // Health check endpoint
 app.get('/health', (req, res) => {
   res.json({ 
-    status: 'OK', 
+    status: 'OKe', 
     message: 'Mendix API is running',
     hasToken: !!process.env.MENDIX_TOKEN,
     nodeEnv: process.env.NODE_ENV

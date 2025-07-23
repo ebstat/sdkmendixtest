@@ -49,6 +49,14 @@ function getModuleName(microflow: any): string | null {
   }
 }
 
+// 🔍 Extract detailed info from microflow objects
+function parseMicroflowObject(obj: microflows.MicroflowObject) {
+  const base = {
+    id: obj.id,
+    type: obj.structureTypeName,
+    caption: (obj as any).caption?.value || null,
+  };
+
 // Test endpoint that replicates your original working script
 app.get('/test-original', async (req, res) => {
   try {
@@ -89,6 +97,62 @@ app.get('/test-original', async (req, res) => {
     });
   }
 });
+
+//full details microflow
+app.get('/apps/:appId/microflows/:microflowName/full', async (req, res) => {
+  try {
+    const { appId, microflowName } = req.params;
+    const { moduleName } = req.query as { moduleName?: string };
+
+    const client = new MendixPlatformClient();
+    const mendixApp = client.getApp(appId);
+    const workingCopy = await mendixApp.createTemporaryWorkingCopy("main");
+    const model = await workingCopy.openModel();
+
+    let microflow = model.allMicroflows().find(mf => mf.name === microflowName);
+    if (!microflow || (moduleName && getModuleName(microflow) !== moduleName)) {
+      return res.status(404).json({ error: 'Microflow not found' });
+    }
+
+    await microflow.load();
+    await (microflow as any).objectCollection.load();
+
+    const objCollection = (microflow as any).objectCollection;
+    const objects = objCollection.objects;
+    const flows = objCollection.flows;
+
+    const parsedObjects = objects.map(parseMicroflowObject);
+    const parsedFlows = flows.map(flow => ({
+      id: flow.id,
+      source: flow.source?.id || null,
+      target: flow.target?.id || null,
+      isErrorHandler: flow.isErrorHandler
+    }));
+
+    res.json({
+      appId,
+      microflow: {
+        name: microflow.name,
+        qualifiedName: microflow.qualifiedName,
+        module: getModuleName(microflow),
+        documentation: (microflow as any).documentation || '',
+        structureTypeName: microflow.structureTypeName,
+        isLoaded: microflow.isLoaded,
+        objects: parsedObjects,
+        flows: parsedFlows
+      }
+    });
+
+  } catch (error) {
+    console.error('Error loading microflow:', error);
+    res.status(500).json({
+      error: 'Failed to load microflow',
+      message: error instanceof Error ? error.message : String(error),
+      hasToken: !!process.env.MENDIX_TOKEN
+    });
+  }
+});
+
 
 // Fixed microflows endpoint
 app.get('/apps/:appId/microflows', async (req, res) => {

@@ -19,9 +19,9 @@ app.get('/apps/:appId/entities', async (req, res) => {
     const { moduleName = 'MyFirstModule' } = req.query;
 
     const client = new MendixPlatformClient();
-    const app = client.getApp(appId);
+    const mendixApp = client.getApp(appId);
     
-    const workingCopy = await app.createTemporaryWorkingCopy("main");
+    const workingCopy = await mendixApp.createTemporaryWorkingCopy("main");
     const model = await workingCopy.openModel();
 
     const domainModelInterface = model
@@ -39,15 +39,12 @@ app.get('/apps/:appId/entities', async (req, res) => {
     const entities = domainModel.entities.map(entity => ({
       id: entity.id,
       name: entity.name,
-      location: entity.location,
+      qualifiedName: entity.qualifiedName,
       attributes: entity.attributes.map(attr => ({
         name: attr.name,
         type: attr.type?.constructor.name || 'Unknown'
       }))
     }));
-
-    // Clean up
-    await workingCopy.delete();
 
     res.json({
       appId,
@@ -56,7 +53,7 @@ app.get('/apps/:appId/entities', async (req, res) => {
       count: entities.length
     });
 
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error fetching entities:', error);
     res.status(500).json({ 
       error: 'Failed to fetch entities', 
@@ -72,9 +69,9 @@ app.get('/apps/:appId/microflows', async (req, res) => {
     const { moduleName = 'MyFirstModule' } = req.query;
 
     const client = new MendixPlatformClient();
-    const app = client.getApp(appId);
+    const mendixApp = client.getApp(appId);
     
-    const workingCopy = await app.createTemporaryWorkingCopy("main");
+    const workingCopy = await mendixApp.createTemporaryWorkingCopy("main");
     const model = await workingCopy.openModel();
 
     const allMicroflows = model.allMicroflows();
@@ -88,18 +85,11 @@ app.get('/apps/:appId/microflows', async (req, res) => {
         return {
           id: microflow.id,
           name: microflow.name,
-          location: microflow.location,
-          parameters: microflow.parameters.map(param => ({
-            name: param.name,
-            type: param.type?.constructor.name || 'Unknown'
-          })),
+          qualifiedName: microflow.qualifiedName,
           returnType: microflow.microflowReturnType?.constructor.name || 'Void'
         };
       })
     );
-
-    // Clean up
-    await workingCopy.delete();
 
     res.json({
       appId,
@@ -108,7 +98,7 @@ app.get('/apps/:appId/microflows', async (req, res) => {
       count: microflowDetails.length
     });
 
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error fetching microflows:', error);
     res.status(500).json({ 
       error: 'Failed to fetch microflows', 

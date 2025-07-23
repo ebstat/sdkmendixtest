@@ -49,14 +49,6 @@ function getModuleName(microflow: any): string | null {
   }
 }
 
-// 🔍 Extract detailed info from microflow objects
-function parseMicroflowObject(obj: microflows.MicroflowObject) {
-  const base = {
-    id: obj.id,
-    type: obj.structureTypeName,
-    caption: (obj as any).caption?.value || null,
-  };
-
 // Test endpoint that replicates your original working script
 app.get('/test-original', async (req, res) => {
   try {
@@ -97,62 +89,6 @@ app.get('/test-original', async (req, res) => {
     });
   }
 });
-
-//full details microflow
-app.get('/apps/:appId/microflows/:microflowName/full', async (req, res) => {
-  try {
-    const { appId, microflowName } = req.params;
-    const { moduleName } = req.query as { moduleName?: string };
-
-    const client = new MendixPlatformClient();
-    const mendixApp = client.getApp(appId);
-    const workingCopy = await mendixApp.createTemporaryWorkingCopy("main");
-    const model = await workingCopy.openModel();
-
-    let microflow = model.allMicroflows().find(mf => mf.name === microflowName);
-    if (!microflow || (moduleName && getModuleName(microflow) !== moduleName)) {
-      return res.status(404).json({ error: 'Microflow not found' });
-    }
-
-    await microflow.load();
-    await (microflow as any).objectCollection.load();
-
-    const objCollection = (microflow as any).objectCollection;
-    const objects = objCollection.objects;
-    const flows = objCollection.flows;
-
-    const parsedObjects = objects.map(parseMicroflowObject);
-    const parsedFlows = flows.map(flow => ({
-      id: flow.id,
-      source: flow.source?.id || null,
-      target: flow.target?.id || null,
-      isErrorHandler: flow.isErrorHandler
-    }));
-
-    res.json({
-      appId,
-      microflow: {
-        name: microflow.name,
-        qualifiedName: microflow.qualifiedName,
-        module: getModuleName(microflow),
-        documentation: (microflow as any).documentation || '',
-        structureTypeName: microflow.structureTypeName,
-        isLoaded: microflow.isLoaded,
-        objects: parsedObjects,
-        flows: parsedFlows
-      }
-    });
-
-  } catch (error) {
-    console.error('Error loading microflow:', error);
-    res.status(500).json({
-      error: 'Failed to load microflow',
-      message: error instanceof Error ? error.message : String(error),
-      hasToken: !!process.env.MENDIX_TOKEN
-    });
-  }
-});
-
 
 // Fixed microflows endpoint
 app.get('/apps/:appId/microflows', async (req, res) => {
@@ -405,44 +341,37 @@ app.get('/apps/:appId/microflows/:microflowName/details', async (req, res) => {
     }
 
     // Load the full microflow model
-    await targetMicroflow.load();
-    
-    const microflowModule = getModuleName(targetMicroflow);
-    
-    // Now we can access more detailed properties
-    const details = {
-      name: targetMicroflow.name,
-      module: microflowModule,
-      qualifiedName: targetMicroflow.qualifiedName || `${microflowModule || 'Unknown'}.${targetMicroflow.name}`,
-      documentation: (targetMicroflow as any).documentation || '',
-      
-      // Try to get detailed structure after loading
-      id: targetMicroflow.id,
-      structureTypeName: targetMicroflow.structureTypeName,
-      
-      // Additional properties that might be available after loading
-      isLoaded: targetMicroflow.isLoaded,
-      
-      // Get available properties dynamically
-      availableProperties: Object.getOwnPropertyNames(targetMicroflow)
-        .filter(prop => !prop.startsWith('_') && typeof (targetMicroflow as any)[prop] !== 'function')
-        .slice(0, 20), // Limit to first 20 to avoid overwhelming response
-    };
+await targetMicroflow.load();
+await (targetMicroflow as any).objectCollection.load();
 
-    res.json({
-      appId,
-      microflow: details,
-      message: 'Microflow loaded successfully - check availableProperties for what data is accessible'
-    });
+const objects = (targetMicroflow as any).objectCollection.objects;
+const flows = (targetMicroflow as any).objectCollection.flows;
 
-  } catch (error: unknown) {
-    console.error('Error loading microflow details:', error);
-    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-    res.status(500).json({ 
-      error: 'Failed to load microflow details', 
-      message: errorMessage,
-      hasToken: !!process.env.MENDIX_TOKEN
-    });
+const actions = objects.map((obj: any) => ({
+  id: obj.id,
+  type: obj.structureTypeName,
+  caption: obj.caption?.value || null,
+  condition: obj.condition?.value || null,
+  returnVariableName: obj.returnVariableName || null,
+  // Add other props as needed
+}));
+
+const connections = flows.map((flow: any) => ({
+  id: flow.id,
+  source: flow.source?.id,
+  target: flow.target?.id,
+  isErrorHandler: flow.isErrorHandler
+}));
+
+res.json({
+  appId,
+  microflow: {
+    name: targetMicroflow.name,
+    qualifiedName: targetMicroflow.qualifiedName,
+    actions,
+    flows: connections
+  }
+});
   }
 });
 

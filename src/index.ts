@@ -341,43 +341,43 @@ app.get('/apps/:appId/microflows/:microflowName/details', async (req, res) => {
     }
 
     // Load the full microflow model
-await targetMicroflow.load();
-await (targetMicroflow as any).objectCollection.load();
+    await targetMicroflow.load();
+    
+    const microflowModule = getModuleName(targetMicroflow);
+    
+    // Now we can access more detailed properties
+    const details = {
+      name: targetMicroflow.name,
+      module: microflowModule,
+      qualifiedName: targetMicroflow.qualifiedName || `${microflowModule || 'Unknown'}.${targetMicroflow.name}`,
+      documentation: (targetMicroflow as any).documentation || '',
+      
+      // Try to get detailed structure after loading
+      id: targetMicroflow.id,
+      structureTypeName: targetMicroflow.structureTypeName,
+      
+      // Additional properties that might be available after loading
+      isLoaded: targetMicroflow.isLoaded,
+      
+      // Get available properties dynamically
+      availableProperties: Object.getOwnPropertyNames(targetMicroflow)
+        .filter(prop => !prop.startsWith('_') && typeof (targetMicroflow as any)[prop] !== 'function')
+        .slice(0, 20), // Limit to first 20 to avoid overwhelming response
+    };
 
-const objects = (targetMicroflow as any).objectCollection.objects;
-const flows = (targetMicroflow as any).objectCollection.flows;
+    res.json({
+      appId,
+      microflow: details,
+      message: 'Microflow loaded successfully - check availableProperties for what data is accessible'
+    });
 
-const actions = objects.map((obj: any) => ({
-  id: obj.id,
-  type: obj.structureTypeName,
-  caption: obj.caption?.value || null,
-  condition: obj.condition?.value || null,
-  returnVariableName: obj.returnVariableName || null,
-  // Add other props as needed
-}));
-
-const connections = flows.map((flow: any) => ({
-  id: flow.id,
-  source: flow.source?.id,
-  target: flow.target?.id,
-  isErrorHandler: flow.isErrorHandler
-}));
-
-res.json({
-  appId,
-  microflow: {
-    name: targetMicroflow.name,
-    qualifiedName: targetMicroflow.qualifiedName,
-    actions,
-    flows: connections
-  }
-});
-  }catch (error: unknown) {
-    console.error('Error fetching full microflow details:', error);
+  } catch (error: unknown) {
+    console.error('Error loading microflow details:', error);
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     res.status(500).json({ 
-      error: 'Failed to fetch full microflow structure', 
-      message: errorMessage
+      error: 'Failed to load microflow details', 
+      message: errorMessage,
+      hasToken: !!process.env.MENDIX_TOKEN
     });
   }
 });

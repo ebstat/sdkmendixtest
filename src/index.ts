@@ -114,11 +114,10 @@ app.get('/apps/:appId/microflows', async (req, res) => {
 });
 
 // Start server
-app.listen(PORT, () => {
-  console.log(`Mendix API server running on port ${PORT}`);
+app.listen(PORT, '0.0.0.0', () => {
+   console.log(`Mendix API server running on port ${PORT}`);
   console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
-  
-  // Verify MENDIX_TOKEN is available
+    // Verify MENDIX_TOKEN is available
   if (process.env.MENDIX_TOKEN) {
     console.log('✅ MENDIX_TOKEN found in environment');
   } else {

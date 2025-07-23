@@ -3,7 +3,7 @@ import { domainmodels } from "mendixmodelsdk";
 import { MendixPlatformClient } from "mendixplatformsdk";
 
 const app = express();
-const PORT = process.env.PORT || 3000;
+const PORT = parseInt(process.env.PORT || '8080', 10);
 
 app.use(express.json());
 

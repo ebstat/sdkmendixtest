@@ -1,5 +1,5 @@
 import express from 'express';
-import { domainmodels, microflows } from "mendixmodelsdk";
+import { domainmodels } from "mendixmodelsdk";
 import { MendixPlatformClient } from "mendixplatformsdk";
 
 const app = express();
@@ -16,7 +16,7 @@ app.get('/health', (req, res) => {
 app.get('/apps/:appId/entities', async (req, res) => {
   try {
     const { appId } = req.params;
-    const { moduleName = 'MyFirstModule' } = req.query;
+    const { moduleName = 'MyFirstModule' } = req.query as { moduleName?: string };
 
     const client = new MendixPlatformClient();
     const mendixApp = client.getApp(appId);
@@ -39,7 +39,7 @@ app.get('/apps/:appId/entities', async (req, res) => {
     const entities = domainModel.entities.map(entity => ({
       id: entity.id,
       name: entity.name,
-      qualifiedName: entity.qualifiedName,
+      qualifiedName: entity.qualifiedName || `${moduleName}.${entity.name}`,
       attributes: entity.attributes.map(attr => ({
         name: attr.name,
         type: attr.type?.constructor.name || 'Unknown'
@@ -53,11 +53,12 @@ app.get('/apps/:appId/entities', async (req, res) => {
       count: entities.length
     });
 
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Error fetching entities:', error);
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     res.status(500).json({ 
       error: 'Failed to fetch entities', 
-      message: error.message 
+      message: errorMessage 
     });
   }
 });
@@ -66,7 +67,7 @@ app.get('/apps/:appId/entities', async (req, res) => {
 app.get('/apps/:appId/microflows', async (req, res) => {
   try {
     const { appId } = req.params;
-    const { moduleName = 'MyFirstModule' } = req.query;
+    const { moduleName = 'MyFirstModule' } = req.query as { moduleName?: string };
 
     const client = new MendixPlatformClient();
     const mendixApp = client.getApp(appId);
@@ -85,7 +86,7 @@ app.get('/apps/:appId/microflows', async (req, res) => {
         return {
           id: microflow.id,
           name: microflow.name,
-          qualifiedName: microflow.qualifiedName,
+          qualifiedName: microflow.qualifiedName || `${moduleName}.${microflow.name}`,
           returnType: microflow.microflowReturnType?.constructor.name || 'Void'
         };
       })
@@ -98,11 +99,12 @@ app.get('/apps/:appId/microflows', async (req, res) => {
       count: microflowDetails.length
     });
 
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Error fetching microflows:', error);
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     res.status(500).json({ 
       error: 'Failed to fetch microflows', 
-      message: error.message 
+      message: errorMessage 
     });
   }
 });
@@ -118,9 +120,9 @@ app.post('/apps/:appId/entities', async (req, res) => {
     }
 
     const client = new MendixPlatformClient();
-    const app = client.getApp(appId);
+    const mendixApp = client.getApp(appId);
     
-    const workingCopy = await app.createTemporaryWorkingCopy("main");
+    const workingCopy = await mendixApp.createTemporaryWorkingCopy("main");
     const model = await workingCopy.openModel();
 
     const domainModelInterface = model
@@ -128,7 +130,6 @@ app.post('/apps/:appId/entities', async (req, res) => {
       .filter((dm) => dm.containerAsModule.name === moduleName)[0];
 
     if (!domainModelInterface) {
-      await workingCopy.delete();
       return res.status(404).json({ 
         error: `Module '${moduleName}' not found` 
       });
@@ -148,11 +149,12 @@ app.post('/apps/:appId/entities', async (req, res) => {
       entityName: entity.name
     });
 
-  } catch (error) {
+  } catch (error: unknown) {
     console.error('Error creating entity:', error);
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     res.status(500).json({ 
       error: 'Failed to create entity', 
-      message: error.message 
+      message: errorMessage 
     });
   }
 });

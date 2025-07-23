@@ -17,8 +17,37 @@ app.get('/health', (req, res) => {
   });
 });
 
-
-
+// Helper function to safely get module name from a microflow
+function getModuleName(microflow: any): string | null {
+  try {
+    // Try to get the module directly
+    if (microflow.containerAsModule) {
+      return microflow.containerAsModule.name;
+    }
+    
+    // If not directly in a module, traverse up the container hierarchy
+    let container = microflow.container;
+    while (container) {
+      if (container.structureTypeName === 'Projects$Module') {
+        return container.name;
+      }
+      container = container.container;
+    }
+    
+    // Alternative approach: parse from qualified name
+    if (microflow.qualifiedName) {
+      const parts = microflow.qualifiedName.split('.');
+      if (parts.length > 1) {
+        return parts[0]; // First part is usually the module name
+      }
+    }
+    
+    return null;
+  } catch (error) {
+    console.warn(`Could not get module name for microflow ${microflow.name}:`, error);
+    return null;
+  }
+}
 
 // Test endpoint that replicates your original working script
 app.get('/test-original', async (req, res) => {
@@ -30,7 +59,7 @@ app.get('/test-original', async (req, res) => {
     console.log('Client created successfully');
 
     // Instead of creating a new app, let's try to get an existing one
-    const app = client.getApp("snps-transitiegesprek"); // Using your app ID
+    const app = client.getApp("snps-transitiegesprek"); // Replace with your actual app GUID
     console.log('App retrieved successfully');
 
     const workingCopy = await app.createTemporaryWorkingCopy("main");
@@ -61,7 +90,7 @@ app.get('/test-original', async (req, res) => {
   }
 });
 
-// Simple microflows endpoint matching your request
+// Fixed microflows endpoint
 app.get('/apps/:appId/microflows', async (req, res) => {
   try {
     const { appId } = req.params;
@@ -83,26 +112,45 @@ app.get('/apps/:appId/microflows', async (req, res) => {
     const allMicroflows = model.allMicroflows();
     console.log(`Total microflows found: ${allMicroflows.length}`);
 
-    let filteredMicroflows = allMicroflows;
+    // Process microflows with safe module name extraction
+    const microflowData = allMicroflows.map(mf => {
+      const moduleName = getModuleName(mf);
+      return {
+        name: mf.name,
+        module: moduleName,
+        qualifiedName: mf.qualifiedName || `${moduleName || 'Unknown'}.${mf.name}`
+      };
+    });
+
+    // Filter by module if specified
+    let filteredMicroflows = microflowData;
     if (moduleName) {
-      filteredMicroflows = allMicroflows.filter(
-        mf => mf.containerAsModule.name === moduleName
+      filteredMicroflows = microflowData.filter(
+        mf => mf.module === moduleName
       );
       console.log(`Microflows in module '${moduleName}': ${filteredMicroflows.length}`);
     }
 
-    const microflowNames = filteredMicroflows.map(mf => ({
-      name: mf.name,
-      module: mf.containerAsModule.name,
-      qualifiedName: mf.qualifiedName
-    }));
+    // Group by module for better overview
+    const microflowsByModule = filteredMicroflows.reduce((acc, mf) => {
+      const module = mf.module || 'Unknown';
+      if (!acc[module]) {
+        acc[module] = [];
+      }
+      acc[module].push(mf);
+      return acc;
+    }, {} as Record<string, any[]>);
+
+    console.log('Microflows grouped by module:', Object.keys(microflowsByModule).map(m => `${m}: ${microflowsByModule[m].length}`));
 
     res.json({
       appId,
       moduleName: moduleName || 'All modules',
       availableModules: allModules.map(m => m.name),
-      microflows: microflowNames,
-      count: microflowNames.length
+      microflows: filteredMicroflows,
+      microflowsByModule,
+      count: filteredMicroflows.length,
+      totalCount: allMicroflows.length
     });
 
   } catch (error: unknown) {
@@ -110,6 +158,57 @@ app.get('/apps/:appId/microflows', async (req, res) => {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     res.status(500).json({ 
       error: 'Failed to fetch microflows', 
+      message: errorMessage,
+      hasToken: !!process.env.MENDIX_TOKEN
+    });
+  }
+});
+
+// Additional endpoint to get microflows by specific module (alternative approach)
+app.get('/apps/:appId/modules/:moduleName/microflows', async (req, res) => {
+  try {
+    const { appId, moduleName } = req.params;
+
+    console.log(`Fetching microflows for app: ${appId}, module: ${moduleName}`);
+
+    const client = new MendixPlatformClient();
+    const mendixApp = client.getApp(appId);
+    
+    const workingCopy = await mendixApp.createTemporaryWorkingCopy("main");
+    const model = await workingCopy.openModel();
+
+    // Find the specific module
+    const targetModule = model.allModules().find(m => m.name === moduleName);
+    if (!targetModule) {
+      return res.status(404).json({
+        error: 'Module not found',
+        message: `Module '${moduleName}' does not exist`,
+        availableModules: model.allModules().map(m => m.name)
+      });
+    }
+
+    // Get microflows directly from the module
+    const microflowsInModule = targetModule.allMicroflows();
+    console.log(`Microflows found in module '${moduleName}': ${microflowsInModule.length}`);
+
+    const microflowNames = microflowsInModule.map(mf => ({
+      name: mf.name,
+      module: moduleName,
+      qualifiedName: mf.qualifiedName || `${moduleName}.${mf.name}`
+    }));
+
+    res.json({
+      appId,
+      moduleName,
+      microflows: microflowNames,
+      count: microflowNames.length
+    });
+
+  } catch (error: unknown) {
+    console.error('Error fetching microflows for module:', error);
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    res.status(500).json({ 
+      error: 'Failed to fetch microflows for module', 
       message: errorMessage,
       hasToken: !!process.env.MENDIX_TOKEN
     });

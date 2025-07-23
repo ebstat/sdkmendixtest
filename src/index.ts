@@ -10,7 +10,7 @@ app.use(express.json());
 // Health check endpoint
 app.get('/health', (req, res) => {
   res.json({ 
-    status: 'OKk', 
+    status: 'OKe', 
     message: 'Mendix API is running',
     hasToken: !!process.env.MENDIX_TOKEN,
     nodeEnv: process.env.NODE_ENV
@@ -187,8 +187,13 @@ app.get('/apps/:appId/modules/:moduleName/microflows', async (req, res) => {
       });
     }
 
-    // Get microflows directly from the module
-    const microflowsInModule = targetModule.allMicroflows();
+    // Get all microflows from the model and filter by module
+    const allMicroflows = model.allMicroflows();
+    const microflowsInModule = allMicroflows.filter(mf => {
+      const mfModuleName = getModuleName(mf);
+      return mfModuleName === moduleName;
+    });
+    
     console.log(`Microflows found in module '${moduleName}': ${microflowsInModule.length}`);
 
     const microflowNames = microflowsInModule.map(mf => ({

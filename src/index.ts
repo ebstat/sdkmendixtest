@@ -9,65 +9,63 @@ app.use(express.json());
 
 // Health check endpoint
 app.get('/health', (req, res) => {
-  res.json({ status: 'OK', message: 'Mendix API is running' });
+  res.json({ 
+    status: 'OK', 
+    message: 'Mendix API is running',
+    hasToken: !!process.env.MENDIX_TOKEN,
+    nodeEnv: process.env.NODE_ENV
+  });
 });
 
-// Get entities for a given app
-app.get('/apps/:appId/entities', async (req, res) => {
+// Test endpoint that replicates your original working script
+app.get('/test-original', async (req, res) => {
   try {
-    const { appId } = req.params;
-    const { moduleName = 'MyFirstModule' } = req.query as { moduleName?: string };
-
+    console.log('Testing original logic...');
+    console.log('MENDIX_TOKEN present:', !!process.env.MENDIX_TOKEN);
+    
     const client = new MendixPlatformClient();
-    const mendixApp = client.getApp(appId);
-    
-    const workingCopy = await mendixApp.createTemporaryWorkingCopy("main");
+    console.log('Client created successfully');
+
+    // Instead of creating a new app, let's try to get an existing one
+    const app = client.getApp("snps-transitiegesprek"); // Using your app ID
+    console.log('App retrieved successfully');
+
+    const workingCopy = await app.createTemporaryWorkingCopy("main");
+    console.log('Working copy created successfully');
+
     const model = await workingCopy.openModel();
+    console.log('Model opened successfully');
 
-    const domainModelInterface = model
-      .allDomainModels()
-      .filter((dm) => dm.containerAsModule.name === moduleName)[0];
-
-    if (!domainModelInterface) {
-      return res.status(404).json({ 
-        error: `Module '${moduleName}' not found` 
-      });
-    }
-
-    const domainModel = await domainModelInterface.load();
-    
-    const entities = domainModel.entities.map(entity => ({
-      id: entity.id,
-      name: entity.name,
-      qualifiedName: entity.qualifiedName || `${moduleName}.${entity.name}`,
-      attributes: entity.attributes.map(attr => ({
-        name: attr.name,
-        type: attr.type?.constructor.name || 'Unknown'
-      }))
-    }));
+    // Try to get all modules first
+    const allModules = model.allModules();
+    console.log('Modules found:', allModules.map(m => m.name));
 
     res.json({
-      appId,
-      moduleName,
-      entities,
-      count: entities.length
+      success: true,
+      message: 'Test completed successfully',
+      modules: allModules.map(m => m.name),
+      hasToken: !!process.env.MENDIX_TOKEN
     });
 
   } catch (error: unknown) {
-    console.error('Error fetching entities:', error);
+    console.error('Test failed:', error);
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     res.status(500).json({ 
-      error: 'Failed to fetch entities', 
-      message: errorMessage 
+      error: 'Test failed', 
+      message: errorMessage,
+      hasToken: !!process.env.MENDIX_TOKEN
     });
   }
 });
 
-// Get microflows for a given app
+// Simple microflows endpoint matching your request
 app.get('/apps/:appId/microflows', async (req, res) => {
   try {
     const { appId } = req.params;
-    const { moduleName = 'MyFirstModule' } = req.query as { moduleName?: string };
+    const { moduleName } = req.query as { moduleName?: string };
+
+    console.log(`Fetching microflows for app: ${appId}, module: ${moduleName}`);
+    console.log('MENDIX_TOKEN present:', !!process.env.MENDIX_TOKEN);
 
     const client = new MendixPlatformClient();
     const mendixApp = client.getApp(appId);
@@ -75,28 +73,33 @@ app.get('/apps/:appId/microflows', async (req, res) => {
     const workingCopy = await mendixApp.createTemporaryWorkingCopy("main");
     const model = await workingCopy.openModel();
 
-    const allMicroflows = model.allMicroflows();
-    const moduleMicroflows = allMicroflows.filter(
-      mf => mf.containerAsModule.name === moduleName
-    );
+    // Get all modules first to debug
+    const allModules = model.allModules();
+    console.log('Available modules:', allModules.map(m => m.name));
 
-    const microflowDetails = await Promise.all(
-      moduleMicroflows.map(async (mfInterface) => {
-        const microflow = await mfInterface.load();
-        return {
-          id: microflow.id,
-          name: microflow.name,
-          qualifiedName: microflow.qualifiedName || `${moduleName}.${microflow.name}`,
-          returnType: microflow.microflowReturnType?.constructor.name || 'Void'
-        };
-      })
-    );
+    const allMicroflows = model.allMicroflows();
+    console.log(`Total microflows found: ${allMicroflows.length}`);
+
+    let filteredMicroflows = allMicroflows;
+    if (moduleName) {
+      filteredMicroflows = allMicroflows.filter(
+        mf => mf.containerAsModule.name === moduleName
+      );
+      console.log(`Microflows in module '${moduleName}': ${filteredMicroflows.length}`);
+    }
+
+    const microflowNames = filteredMicroflows.map(mf => ({
+      name: mf.name,
+      module: mf.containerAsModule.name,
+      qualifiedName: mf.qualifiedName
+    }));
 
     res.json({
       appId,
-      moduleName,
-      microflows: microflowDetails,
-      count: microflowDetails.length
+      moduleName: moduleName || 'All modules',
+      availableModules: allModules.map(m => m.name),
+      microflows: microflowNames,
+      count: microflowNames.length
     });
 
   } catch (error: unknown) {
@@ -104,57 +107,8 @@ app.get('/apps/:appId/microflows', async (req, res) => {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     res.status(500).json({ 
       error: 'Failed to fetch microflows', 
-      message: errorMessage 
-    });
-  }
-});
-
-// Create new entity (your original functionality)
-app.post('/apps/:appId/entities', async (req, res) => {
-  try {
-    const { appId } = req.params;
-    const { entityName, moduleName = 'MyFirstModule' } = req.body;
-
-    if (!entityName) {
-      return res.status(400).json({ error: 'entityName is required' });
-    }
-
-    const client = new MendixPlatformClient();
-    const mendixApp = client.getApp(appId);
-    
-    const workingCopy = await mendixApp.createTemporaryWorkingCopy("main");
-    const model = await workingCopy.openModel();
-
-    const domainModelInterface = model
-      .allDomainModels()
-      .filter((dm) => dm.containerAsModule.name === moduleName)[0];
-
-    if (!domainModelInterface) {
-      return res.status(404).json({ 
-        error: `Module '${moduleName}' not found` 
-      });
-    }
-
-    const domainModel = await domainModelInterface.load();
-    const entity = domainmodels.Entity.createIn(domainModel);
-    entity.name = entityName || `NewEntity_${Date.now()}`;
-
-    await model.flushChanges();
-    await workingCopy.commitToRepository("main");
-
-    res.json({
-      success: true,
-      message: `Entity '${entity.name}' created successfully`,
-      entityId: entity.id,
-      entityName: entity.name
-    });
-
-  } catch (error: unknown) {
-    console.error('Error creating entity:', error);
-    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-    res.status(500).json({ 
-      error: 'Failed to create entity', 
-      message: errorMessage 
+      message: errorMessage,
+      hasToken: !!process.env.MENDIX_TOKEN
     });
   }
 });

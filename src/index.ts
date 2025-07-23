@@ -17,13 +17,7 @@ app.get('/health', (req, res) => {
   });
 });
 
-// test app data
-app.get('/branches/:appId', async (req, res) => {
-  const client = new MendixPlatformClient();
-  const app = client.getApp(req.params.appId);
-  const branches = await app.getBranches();
-  res.json(branches.map(b => b.name));
-});
+
 
 
 // Test endpoint that replicates your original working script

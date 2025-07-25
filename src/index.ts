@@ -426,7 +426,7 @@ app.get('/apps/:appId/microflows/by-qualified-name/:qualifiedName', async (req, 
 
 // Start server
 app.listen(PORT, '0.0.0.0', () => {
-   console.log(`Mendix API server running on port ${PORT}`);
+   console.log(`Mendix APIi server running on port ${PORT}`);
   console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
     // Verify MENDIX_TOKEN is available
   if (process.env.MENDIX_TOKEN) {
